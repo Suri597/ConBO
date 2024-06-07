@@ -45,6 +45,8 @@ class LSemiBOResult:
     individual_monitoring_time: Any
     sample_generation_time: Any
     topk_time: Any
+    iteration_timestamps:Any
+    start_timestamp: Any
 
 @dataclass(frozen=False)
 class LSemiBOOptimizer(Optimizer[float, LSemiBOResult]):
@@ -73,8 +75,8 @@ class LSemiBOOptimizer(Optimizer[float, LSemiBOResult]):
         self._set_region_support(bounds)
         self._set_rng(seed)
 
-        samples,components, total_time, history,  individual_monitoring_time,sample_generation_time, topk_time = self._sample()
-        return LSemiBOResult(samples,components, total_time, history, individual_monitoring_time,sample_generation_time, topk_time)
+        samples,components, total_time, history,  individual_monitoring_time,sample_generation_time, topk_time, iteration_timestamps, start_timestamp = self._sample()
+        return LSemiBOResult(samples,components, total_time, history, individual_monitoring_time,sample_generation_time, topk_time, iteration_timestamps, start_timestamp)
 
     def _set_rng(self, seed):
         self.seed = self.seed
@@ -98,6 +100,8 @@ class LSemiBOOptimizer(Optimizer[float, LSemiBOResult]):
                     
 
         total_start_time = time.perf_counter()
+        start_timestamp = total_start_time
+        iteration_timestamps = []
         print(f"Starting Replication for seed {self.seed}")
 
         if self.is_type == "lhs_sampling":
@@ -111,7 +115,11 @@ class LSemiBOOptimizer(Optimizer[float, LSemiBOResult]):
         #for l in x_train:
             #print("mmmm",l)
         x_train_ = [Sample(tuple(l)) for l in x_train]
-        y_train = self.func.eval_samples(x_train_)
+        y_train = []
+        for sample in x_train_:
+            y_train.append(self.func.eval_sample(sample))
+            iteration_timestamps.append(time.perf_counter())
+        
         #print("x_train_after",x_train_)
        
         # y_train = compute_robustness(x_train, self.specification, self.tf_wrapper)
@@ -180,7 +188,7 @@ class LSemiBOOptimizer(Optimizer[float, LSemiBOResult]):
                         self.func.history,\
                         self.func.specification._get_individual_monitoring_times(),\
                         sample_generation_time,\
-                        topk_time
+                        topk_time, iteration_timestamps, start_timestamp
                             
                 else:
                     if self.func.specification.num_unfalsified_components == 1:
@@ -191,6 +199,7 @@ class LSemiBOOptimizer(Optimizer[float, LSemiBOResult]):
                         pred_mean_Y[budget+3] = candidate_EI
                         x_train = np.vstack((x_train, np.array([pred_sample_x])))
                         pred_sample_y = self.func.eval_sample(Sample(tuple(pred_sample_x)))
+                        iteration_timestamps.append(time.perf_counter())
                       
                     
                     else:
@@ -205,6 +214,7 @@ class LSemiBOOptimizer(Optimizer[float, LSemiBOResult]):
                         pred_mean_Y[budget+3] = Pred_Y
                         x_train = np.vstack((x_train, np.array([pred_sample_x])))
                         pred_sample_y = self.func.eval_sample(Sample(tuple(pred_sample_x)))
+                        iteration_timestamps.append(time.perf_counter())
                         
                     
                     
@@ -217,7 +227,7 @@ class LSemiBOOptimizer(Optimizer[float, LSemiBOResult]):
                 self.func.history,\
                 self.func.specification._get_individual_monitoring_times(),\
                 sample_generation_time,\
-                topk_time
+                topk_time, iteration_timestamps, start_timestamp
 
     def lsemibo_req(self, x_train, gpr_model, classifier_model, rng):
     #def lsemibo_req(self, x_train, gpr_model, classifier_model, seed):
